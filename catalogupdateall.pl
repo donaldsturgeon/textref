@@ -18,10 +18,10 @@ $dbh = dbiconnect()
 
 # Before trying to update/import data, check that our table definitions are correct
 
-my $sthcheck = $dbh->prepare("SELECT * FROM catalogdef LIMIT 1");
+my $sthcheck = $dbh->prepare("SELECT endpointid, datahash FROM catalogdef LIMIT 1");
 if(!$sthcheck->execute()) {
   $dbh->do("DROP TABLE catalogdef");
-  my $sql = "CREATE TABLE `catalogdef` (`endpointid` int(11) NOT NULL, `created` datetime NOT NULL, `updated` datetime NOT NULL, `dataurl` text, `resourcetemplate` text, `shortname` varchar(30) DEFAULT NULL, `longname` text, `metaurl` text)";
+  my $sql = "CREATE TABLE `catalogdef` (`endpointid` int(11) NOT NULL, `created` datetime NOT NULL, `updated` datetime NOT NULL, `dataurl` text, `resourcetemplate` text, `shortname` varchar(30) DEFAULT NULL, `longname` text, `metaurl` text, `datahash` CHAR(32) NOT NULL)";
   $dbh->do($sql) or die $dbh->errstr;
 }
 
@@ -45,15 +45,18 @@ my $sthcheck = $dbh->prepare("SELECT $sqlfields FROM catalog LIMIT 1");
 if(!$sthcheck->execute()) {
   $dbh->do("DROP TABLE catalog");
   my $sql = "CREATE TABLE catalog ($sqlcreatefields)";
-  print $sql;
   $dbh->do($sql) or die $dbh->errstr;
 }
 
 my @urls = knownendpoints();
+if(!@urls) {
+  @urls = @defaultendpoints;
+}
 
 foreach my $url (@urls) {
-  print "Fetching $url...\n";
-  updatecatalogdef($url);
+  print "Fetching $url... ";
+  my ($error, $desc) = updatecatalogdef($url);
+  print $desc . "\n";
 }
 
 

@@ -53,19 +53,23 @@ our @datafields = (
   },
   {
     name => 'fulltext_read',
-    type => 'bool'
+    type => 'bool',
+    icon => '<img src="static/icon-read-small.png" title="Full-text view" width="12px" />',
   },
   {
     name => 'fulltext_search',
-    type => 'bool'
+    type => 'bool',
+    icon => '<img src="static/icon-search-small.png" title="Full-text search" width="12px" />',
   },
   {
     name => 'fulltext_download',
-    type => 'bool'
+    type => 'bool',
+    icon => '<img src="static/icon-download-small.png" title="Full-text download" width="12px" />',
   },
   {
     name => 'image',
-    type => 'bool'
+    type => 'bool',
+    icon => '<img src="static/icon-image-small.png" title="Scanned image view" width="12px" />',
   }
 );
 

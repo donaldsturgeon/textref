@@ -45,7 +45,11 @@ my %endpointbyid = ();
 loadmeta();
 
 if(param('method') eq "browse") {
-  $content = browse();
+  my %searchspec = ();
+  if(param('page')) {
+    $searchspec{'page'} = param('page');
+  }
+  $content = browse(fields => \%searchspec);
 }
 
 if(param('method') eq "search") {
@@ -57,6 +61,9 @@ if(param('method') eq "search") {
     foreach my $field (@datafields) {
       if($field->{'searchable'}) {
         if($field->{'type'} eq 'text') {
+          if(param($field->{'name'})) {
+            $pagetitle = escapequotes(Encode::decode('utf8', param($field->{'name'}))) . " - " . $pagetitle;
+          }
           $searchform .= "<tr><th>" . $field->{'title'} . "</th><td><input type=\"text\" value=\"" . escapequotes(Encode::decode('utf8', param($field->{'name'}))) . "\" name=\"" . $field->{'name'} . "\" /></td></tr>";
         } else {
         }
@@ -105,7 +112,7 @@ if(param('method') eq "import") {
     }
   }
 
-  $content .= "<p>To import new data into the TextRef system, you first need to <a href=\"https://textref.org/data-model.html\">create and publish your dataset</a>.</p>";
+  $content .= "<p>To import new data into the TextRef system, you first need to <a href=\"https://textref.org/data-model\">create and publish your dataset</a>.</p>";
   $content .= "<p>Once your dataset is available online in a supported format, you can add it to the TextRef catalog by entering your metadata URL in the box below:</p>";
   $content .= "<div id=\"importbox\"><form action=\"textref.pl\" method=\"post\"><input type=\"hidden\" name=\"method\" value=\"import\" />";
 
@@ -144,13 +151,13 @@ sub browse
 
   my ($datarows, $total) = fetchdata(%request);
 
-  my $fragment = "<table class=\"resultset\">";
+  my $fragment = "<div class=\"resultset\"><table>";
   my @columnstoshow = qw(title author edition);
   $fragment .=  "<tr><th>Location</th>";
   foreach my $col (@columnstoshow) {
     $fragment .=  "<th>" . fieldbyname($col)->{'title'} . "</th>";
   }
-  $fragment .=  "</tr>";
+  $fragment .=  "<th>Features</th></tr>";
 
   for(my $i=0;$i<@{$datarows};$i++) {
     my $resourceurl = "";
@@ -162,11 +169,20 @@ sub browse
     $fragment .= "<tr><td>" . $meta{$endpointbyid{$datarows->[$i]->{'endpointid'}}}->{'shortname'} . "$resourceurl</td>";
     foreach my $col (@columnstoshow) {
       my $url = "textref.pl?method=search&amp;" . $col . "=" . $datarows->[$i]->{$col};
-      if($col eq 'title') {
-      }
-      $fragment .=  "<td><a href=\"$url\">" . $datarows->[$i]->{$col} . "</a></td>";
+      my $output = $datarows->[$i]->{$col};
+      my $skippunctuation = "([^\(\)（）,\. 、;-]+)";
+      $output =~ s/$skippunctuation/"<a href=\"textref.pl?method=search&amp;" . $col . "=" . urlcode(Encode::encode('utf8',$1)) . "\">$1<\/a>"/eg;
+
+      $fragment .=  "<td>$output</td>";
     }
-    $fragment .=  "</tr>";
+    $fragment .= "";
+    my $featurelist = "";
+    foreach my $field (@datafields) {
+      if($field->{'icon'} && $datarows->[$i]->{$field->{'name'}}) {
+        $featurelist .= $field->{'icon'} . " ";
+      }
+    }
+    $fragment .=  "<td>$featurelist</td></tr>";
   }
   $fragment .=  "</table>";
 
@@ -181,12 +197,34 @@ sub browse
     $ss .= "&amp;" . $p . "=" . $request{'fields'}->{$p};
   }
   if($pagestotal>1) {
-    if($pagestotal > $thispage) {
-      $pagedesc .= "<a href=\"textref.pl?method=" . param('method') . "&amp;page=" . ($thispage+1) . "$ss\">Next</a> ";
+    my $showfrom = 1;
+    my $showto = $thispage;
+    if($thispage > 6) {
+      $showfrom = $thispage-4;
+      $pagedesc .= "<a href=\"textref.pl?method=" . param('method') . "&amp;page=1$ss\">1</a> ... ";
     }
+    for(my $page=$showfrom;$page<$showto;$page++) {
+      $pagedesc .= "<a href=\"textref.pl?method=" . param('method') . "&amp;page=" . ($page) . "$ss\">" . ($page) . "</a> ";
+    }
+    $pagedesc .= ($thispage) . " ";
+    $showfrom = $thispage+1;
+    $showto = $pagestotal;
+    my $lastpagedesc = "";
+    if($showto-$showfrom > 6) {
+      $showto = $thispage+4;
+      $lastpagedesc .= " ... <a href=\"textref.pl?method=" . param('method') . "&amp;page=$pagestotal$ss\">$pagestotal</a>";
+    }
+    for(my $page=$showfrom;$page<=$showto;$page++) {
+      $pagedesc .= "<a href=\"textref.pl?method=" . param('method') . "&amp;page=" . ($page) . "$ss\">" . ($page) . "</a> ";
+    }
+    $pagedesc .= $lastpagedesc;
   }
 
-  $fragment .= "<p>Total: $total ($pagedesc)</p>";
+  my $jumppage = "";
+  if($pagestotal>1) {
+    $jumppage = "Jump to page: $pagedesc ";
+  }
+  $fragment .= "<p>Total $total results. $jumppage</p></div>";
   return $fragment;
 }
 
@@ -219,7 +257,7 @@ sub fetchdata
   my $resultfrom = 0;
   if($request{'fields'}->{'page'}) {
     $page = $request{'fields'}->{'page'};
-    $resultfrom = $page*$resultsperpage;
+    $resultfrom = ($page-1)*$resultsperpage;
   }
   my $limit = "$resultfrom,$resultsperpage";
   my $order = "title, author";
@@ -306,3 +344,11 @@ sub loadmeta
     $endpointbyid{$row->[0]} = $row->[7];
   }
 }
+
+sub urlcode
+{
+  my ($orig) = @_;
+  $orig =~ s/([^A-Za-z0-9])/sprintf("%%%02X", ord($1))/seg;
+  return $orig;
+}
+
